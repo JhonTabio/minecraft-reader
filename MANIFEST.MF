@@ -1,5 +1,4 @@
 Manifest-Version: 1.0
-Main-Class: com.jhontabio.minecraftreader.MCR
 Premain-Class: com.jhontabio.minecraftreader.Silverfish
 Agent-Class: com.jhontabio.minecraftreader.Silverfish
 Implementation-Title: MinecraftReader

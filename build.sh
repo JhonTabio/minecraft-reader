@@ -6,6 +6,5 @@ if [ ! -d "bin/" ]; then
 fi
 
 javac -d bin/class/ src/main/java/com/jhontabio/minecraftreader/*.java
-#java -cp bin/ MCR
-jar cfm bin/jar/mcr.jar MANIFEST.MF -C bin/class/ .
-java -jar bin/jar/mcr.jar
+jar cfm bin/jar/silverfish.jar MANIFEST.MF -C bin/class/ .
+#java -jar bin/jar/silverfish.jar
