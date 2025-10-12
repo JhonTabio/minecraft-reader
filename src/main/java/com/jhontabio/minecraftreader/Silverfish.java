@@ -27,6 +27,7 @@ public class Silverfish
   // Windows only solution to create a new PrintStream using Windows' special device name for the active console's output
   private static PrintStream createStream()
   {
+    if(!System.getProperty("os.name").contains("Win")) return System.out;
     try{ return new PrintStream(new FileOutputStream("CONOUT$"), true, StandardCharsets.UTF_8); }
     catch(Exception e){ return System.out; }
   }
@@ -39,6 +40,7 @@ public class Silverfish
   // Windows only solution to display our contents to the terminal
   private static void displayLoggerToConsole()
   {
+    if(!System.getProperty("os.name").contains("Win")) return;
     try
     {
       // Bind System.out/err to the active console buffer explicitly
