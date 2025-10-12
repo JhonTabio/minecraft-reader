@@ -9,20 +9,35 @@ import java.nio.charset.StandardCharsets;
 
 public class Silverfish
 {
+  // DEBUG USE
+  private static final PrintStream silverfish_stream = createStream();
+
   public static void premain(String arg)
   {
-    displayOutputToConsole();
-    System.out.println("Hello before anything else from " + arg);
+    //displayLoggerToConsole();
+    print("Hello before anything else from " + arg);
   }
 
   public static void agentmain(String arg)
   {
-    System.out.println("Hello after main from " + arg);
+    print("Hello after main from " + arg);
   }
 
   // DEBUG USE
+  // Windows only solution to create a new PrintStream using Windows' special device name for the active console's output
+  private static PrintStream createStream()
+  {
+    try{ return new PrintStream(new FileOutputStream("CONOUT$"), true, StandardCharsets.UTF_8); }
+    catch(Exception e){ return System.out; }
+  }
+
+  private static void print(String str)
+  {
+    silverfish_stream.println("[Silverfish] " + str);
+  }
+
   // Windows only solution to display our contents to the terminal
-  private static void displayOutputToConsole()
+  private static void displayLoggerToConsole()
   {
     try
     {
