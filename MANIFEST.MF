@@ -1,0 +1,9 @@
+Manifest-Version: 1.0
+Main-Class: com.jhontabio.minecraftreader.MCR
+Premain-Class: com.jhontabio.minecraftreader.Silverfish
+Agent-Class: com.jhontabio.minecraftreader.Silverfish
+Implementation-Title: MinecraftReader
+Implementation-Version: 0.0.1
+Automatic-Module-Name: mcr
+Can-Redfine-Classes: true
+Can-Retransform-Classes: true

@@ -1,3 +1,5 @@
+package com.jhontabio.minecraftreader;
+
 public class MCR
 {
 	public static void main(String[] args)
