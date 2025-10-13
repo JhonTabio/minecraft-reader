@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.lang.instrument.Instrumentation;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 // Debug Terminal imports
@@ -16,6 +17,12 @@ import java.nio.charset.StandardCharsets;
 public class Silverfish
 {
   private static Instrumentation instrumentation = null;
+
+  // TEMP OBF NAMES
+  private static final String CLIENT_NAME = "fzz";
+  private static final String CLIENT_GET_INSTANCE_NAME = "W";
+  private static final String COMMAND_CLASS_NAME = "ek";
+  private static final String COMMAND_NAME = "a";
   // DEBUG USE
   private static final PrintStream SILVERFISH_STREAM = createStream();
 
@@ -49,9 +56,12 @@ public class Silverfish
 
     try
     {
+      ClassLoader clsLoader = Thread.currentThread().getContextClassLoader();
+      if(clsLoader == null) clsLoader = ClassLoader.getSystemClassLoader();
+
       // Fetch these from the Mojang provided mappings
-      Class<?> clientCls = Class.forName("fzz", false, Thread.currentThread().getContextClassLoader()); // net.minecraft.client.Minecraft Class
-      Method getClientInstance = clientCls.getDeclaredMethod("W"); // getInstance() -> Minecraft Method
+      Class<?> clientCls = Class.forName(CLIENT_NAME, false, clsLoader); // net.minecraft.client.Minecraft Class
+      Method getClientInstance = clientCls.getDeclaredMethod(CLIENT_GET_INSTANCE_NAME); // getInstance() -> Minecraft Method
       getClientInstance.setAccessible(true);
       Object mineClient = getClientInstance.invoke(null);
 
@@ -60,6 +70,26 @@ public class Silverfish
         print("Unable to get Minecraft Client");
         return;
       }
+
+      print("Minecraft Client got!");
+
+      Class<?> commandCls = Class.forName(COMMAND_CLASS_NAME, false, clsLoader);
+      Field cmdField = commandCls.getField(COMMAND_NAME); // This field is a public static field
+
+      Object commandPrefixObj = cmdField.get(null);
+
+      // Ensuring we acces what we expect
+      int cmdFieldMods = cmdField.getModifiers();
+      if(!Modifier.isStatic(cmdFieldMods) || !Modifier.isFinal(cmdFieldMods))
+      {
+        print("ERROR: Command field 'a' is not static final");
+        commandPrefixObj = null;
+      }
+      else commandPrefixObj = cmdField.get(null);
+
+      final String COMMAND_PREFIX = commandPrefixObj != null ? (String) commandPrefixObj : null;
+
+      print("Command prefix got: '" + COMMAND_PREFIX + "'");
     }
     catch(ClassNotFoundException e)
     {
@@ -71,8 +101,6 @@ public class Silverfish
       print("Error: " + e);
       return;
     }
-
-    print("Minecraft Client got!");
   }
 
   // DEBUG USE
