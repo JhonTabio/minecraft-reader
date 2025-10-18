@@ -101,21 +101,39 @@ public class Silverfish
       print("Minecraft Client got!");
 
       Method getIntegratedServerInstance = clientCls.getMethod(CLIENT_GET_INTEGRATED_SERVER_INSTANCE);
+
+      int getIntegratedServerInstanceMods = getIntegratedServerInstance.getModifiers();
+
+      if(!Modifier.isPublic(getIntegratedServerInstanceMods))
+      {
+        print(String.format("ERROR: Get Integrated server method '%s' is not public", CLIENT_GET_INTEGRATED_SERVER_INSTANCE));
+        return;
+      }
+
       print("Minecraft integrated server instance method got!");
       Object integratedServer = getIntegratedServerInstance.invoke(mineClient);
-      print("Minecraft integrated server got!");
 
       if(integratedServer == null)
       {
         print("Single player integrated server is not running...");
         return;
       }
+      print("Minecraft integrated server got!");
 
       Class<?> serverCls = Class.forName(MINECRAFTSERVER_NAME, false, clsLoader);
       print("Got server class: " + serverCls);
 
       Method serverGetCMDS = serverCls.getMethod(MINECRAFTSERVER_GET_COMMANDS_METHOD);
+
+      int serverGetCMDSMods = serverGetCMDS.getModifiers();
+
+      if(!Modifier.isPublic(serverGetCMDSMods))
+      {
+        print(String.format("ERROR: Get server command method '%s' is not public", MINECRAFTSERVER_GET_COMMANDS_METHOD));
+        return;
+      }
       print("Got server commands method: " + serverGetCMDS);
+
       Object serverCMDS = serverGetCMDS.invoke(integratedServer);
       print("Got server commands: " + serverCMDS);
 
@@ -137,7 +155,6 @@ public class Silverfish
       if(!Modifier.isStatic(cmdFieldMods) || !Modifier.isFinal(cmdFieldMods))
       {
         print(String.format("ERROR: Command field '%s' is not static final", COMMAND_PREFIX_NAME));
-        cmdPrefixObj = null;
         return;
       }
 
@@ -146,6 +163,14 @@ public class Silverfish
       print("Command prefix got: '" + COMMAND_PREFIX + "'");
 
       Method cmdGetDispatcher = cmdCls.getMethod(COMMAND_GET_DISPATCHER_NAME);
+
+      int cmdGetDispatcherMods = cmdGetDispatcher.getModifiers();
+      if(!Modifier.isPublic(cmdGetDispatcherMods))
+      {
+        print(String.format("ERROR: Command get dispatcher '%s' is not public", COMMAND_GET_DISPATCHER_NAME));
+        return;
+      }
+
       Object cmdDispatcher = cmdGetDispatcher.invoke(serverCMDS);
 
       if(cmdDispatcher == null)
@@ -156,6 +181,14 @@ public class Silverfish
       print("Command dispatcher got");
 
       Method cmdGetSourceStack = integratedServer.getClass().getMethod(COMMAND_GET_SOURCE_STACK);
+
+      int cmdGetSourceStackMods = cmdGetSourceStack.getModifiers();
+      if(!Modifier.isPublic(cmdGetSourceStackMods))
+      {
+        print(String.format("ERROR: Command get source stack '%s' is not public", COMMAND_GET_SOURCE_STACK));
+        return;
+      }
+
       Object cmdSourceStack = cmdGetSourceStack.invoke(integratedServer);
 
       if(cmdSourceStack == null)
