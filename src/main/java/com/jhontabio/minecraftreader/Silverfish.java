@@ -7,6 +7,7 @@ import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+
 // Debug Terminal imports
 import java.io.PrintStream;
 import java.io.FileNotFoundException;
@@ -21,10 +22,18 @@ public class Silverfish
   // TEMP OBF NAMES
   private static final String CLIENT_NAME = "fzz";
   private static final String CLIENT_GET_INSTANCE_NAME = "W";
+  private static final String CLIENT_GET_INTEGRATED_SERVER_INSTANCE = "ab";
+  private static final String MINECRAFTSERVER_GET_COMMANDS_METHOD = "aJ";
   private static final String COMMAND_CLASS_NAME = "ek";
-  private static final String COMMAND_NAME = "a";
+  private static final String COMMAND_PREFIX_NAME = "a";
+  private static final String COMMAND_GET_DISPATCHER_NAME = "a";
+  private static final String COMMAND_DISPATCHER_CLASS_NAME = "ej";
+  private static final String COMMAND_DISPATCHER_NAME = "j";
+  // TEMP OBF NAMES
+
   // DEBUG USE
   private static final PrintStream SILVERFISH_STREAM = createStream();
+  // DEBUG USE
 
   public static void premain(String arg, Instrumentation inst)
   {
@@ -61,8 +70,7 @@ public class Silverfish
 
       // Fetch these from the Mojang provided mappings
       Class<?> clientCls = Class.forName(CLIENT_NAME, false, clsLoader); // net.minecraft.client.Minecraft Class
-      Method getClientInstance = clientCls.getDeclaredMethod(CLIENT_GET_INSTANCE_NAME); // getInstance() -> Minecraft Method
-      getClientInstance.setAccessible(true);
+      Method getClientInstance = clientCls.getMethod(CLIENT_GET_INSTANCE_NAME); // getInstance() -> Minecraft Method
       Object mineClient = getClientInstance.invoke(null);
 
       if(mineClient == null)
@@ -73,23 +81,61 @@ public class Silverfish
 
       print("Minecraft Client got!");
 
-      Class<?> commandCls = Class.forName(COMMAND_CLASS_NAME, false, clsLoader);
-      Field cmdField = commandCls.getField(COMMAND_NAME); // This field is a public static field
+      Method getIntegratedServerInstance = clientCls.getMethod(CLIENT_GET_INTEGRATED_SERVER_INSTANCE);
+      print("Minecraft integrated server instance method got!");
+      Object integratedServer = getIntegratedServerInstance.invoke(mineClient);
+      print("Minecraft integrated server got!");
 
-      Object commandPrefixObj = cmdField.get(null);
+      if(integratedServer == null)
+      {
+        print("Single player integrated server is not running...");
+        return;
+      }
+
+      Class<?> serverCls = Class.forName("net.minecraft.server.MinecraftServer", false, clsLoader);
+      print("Got server class: " + serverCls);
+
+      Method serverGetCMDS = serverCls.getMethod(MINECRAFTSERVER_GET_COMMANDS_METHOD);
+      print("Got server commands method: " + serverGetCMDS);
+      Object serverCMDS = serverGetCMDS.invoke(integratedServer);
+      print("Got server commands: " + serverCMDS);
+
+      if(serverCMDS == null)
+      {
+        print("Could not retrieve server commands");
+        return;
+      }
+
+      Class<?> cmdCls = Class.forName(COMMAND_CLASS_NAME, false, clsLoader);
+      Field cmdPrefixField = cmdCls.getField(COMMAND_PREFIX_NAME); // This field is a public static field
+      print("Got server commands field: " + cmdPrefixField);
+
+      Object cmdPrefixObj = cmdPrefixField.get(serverCMDS);
+      print("Got server commands object: " + cmdPrefixObj);
 
       // Ensuring we acces what we expect
-      int cmdFieldMods = cmdField.getModifiers();
+      int cmdFieldMods = cmdPrefixField.getModifiers();
       if(!Modifier.isStatic(cmdFieldMods) || !Modifier.isFinal(cmdFieldMods))
       {
-        print("ERROR: Command field 'a' is not static final");
-        commandPrefixObj = null;
+        print(String.format("ERROR: Command field '%s' is not static final", COMMAND_PREFIX_NAME));
+        cmdPrefixObj = null;
+        return;
       }
-      else commandPrefixObj = cmdField.get(null);
 
-      final String COMMAND_PREFIX = commandPrefixObj != null ? (String) commandPrefixObj : null;
+      final String COMMAND_PREFIX = cmdPrefixObj != null ? (String) cmdPrefixObj : null;
 
       print("Command prefix got: '" + COMMAND_PREFIX + "'");
+
+      Method cmdGetDispatcher = cmdCls.getMethod(COMMAND_GET_DISPATCHER_NAME);
+      print("Class: " + cmdCls + " | dispatcher: " + cmdGetDispatcher);
+      Object cmdDispatcher = cmdGetDispatcher.invoke(serverCMDS);
+
+      if(cmdDispatcher == null)
+      {
+        print("Could not retrieve command dispatcher");
+        return;
+      }
+      print("Command dispatcher got");
     }
     catch(ClassNotFoundException e)
     {
