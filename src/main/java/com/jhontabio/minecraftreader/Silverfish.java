@@ -2,6 +2,7 @@ package com.jhontabio.minecraftreader;
 
 import java.util.Arrays;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Field;
@@ -17,14 +18,46 @@ import java.nio.charset.StandardCharsets;
 
 public class Silverfish
 {
-  private static Instrumentation instrumentation = null;
+  private static Instrumentation instrumentation;
+
+  private static ScheduledExecutorService exec;
+
+  private static ClassLoader clsLoader;
+
+  private static Class<?> clientCls;
+  private static Class<?> serverCls;
+  private static Class<?> cmdCls;
+  private static Class<?> cmdDispatcherCls;
+  private static Class<?> cmdNodeCls;
+
+  private static Field cmdPrefixField;
+  
+  private static Method getIntegratedServerInstance;
+  private static Method serverGetCMDS;
+  private static Method cmdGetDispatcher;
+  private static Method cmdGetSourceStack;
+  private static Method cmdDispatcherGetRoot;
+  private static Method cmdDispatcherGetAllUsage;
+
+  private static Object mineClient;
+  private static Object integratedServer;
+  private static Object serverCMDS;
+  private static Object cmdDispatcher;
+  private static Object cmdSourceStack;
+  private static Object cmdRoot;
+
+  private static String COMMAND_PREFIX;
 
   // TEMP OBF NAMES
   private static final String CLIENT_NAME = "fzz";
   private static final String CLIENT_GET_INSTANCE_NAME = "W";
   private static final String CLIENT_GET_INTEGRATED_SERVER_INSTANCE = "ab";
+
   private static final String MINECRAFTSERVER_NAME = "net.minecraft.server.MinecraftServer";
   private static final String MINECRAFTSERVER_GET_COMMANDS_METHOD = "aJ";
+  private static final String MINECRAFTSERVER_INIT_METHOD = "e";
+  private static final String MINECRAFTSERVER_STOP_METHOD = "z";
+
   private static final String COMMAND_CLASS_NAME = "ek";
   private static final String COMMAND_PREFIX_NAME = "a";
   private static final String COMMAND_GET_DISPATCHER_NAME = "a";
@@ -42,7 +75,11 @@ public class Silverfish
     //displayLoggerToConsole();
     instrumentation = inst;
     print("Hello before anything else from " + arg);
-    spawn();
+    
+    // Run a new thread as to not hinder the game process
+    new Thread(() -> {
+      infestGame();
+    }, "Silverfish"){{setDaemon(true);}}.start();
   }
 
   public static void agentmain(String arg)
@@ -66,13 +103,244 @@ public class Silverfish
   {
     print("Burrowing in to the game");
 
+    exec = Executors.newSingleThreadScheduledExecutor(s -> {
+      Thread t = new Thread(s, "Silverfish - Init");
+      t.setDaemon(true);
+      return t;
+    });
+
+    exec.scheduleAtFixedRate(Silverfish::merge_with_client, 3, 2, TimeUnit.SECONDS);
+
+    try
+    {
+      exec.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+    }
+    catch(InterruptedException e)
+    {
+      print("Spawning was interrupted...");
+    }
+
+    notify_friends();
+  }
+
+  private static void merge_with_client()
+  {
+    try
+    {
+      clsLoader = Thread.currentThread().getContextClassLoader();
+      if(clsLoader == null)
+      {
+        clsLoader = ClassLoader.getSystemClassLoader();
+        print("WARNING: Could not get Context Class Loader, using System default...");
+      }
+
+      // Fetch these from the Mojang provided mappings
+      clientCls = Class.forName(CLIENT_NAME, false, clsLoader); // net.minecraft.client.Minecraft Class
+
+      int clientClsMods = clientCls.getModifiers();
+      if(!Modifier.isPublic(clientClsMods))
+      {
+        print(String.format("ERROR: Class '%s' is not public", CLIENT_NAME));
+        return;
+      }
+
+      Method getClientInstance = clientCls.getMethod(CLIENT_GET_INSTANCE_NAME); // getInstance() -> Minecraft Method
+
+      int getClientInstanceMods = getClientInstance.getModifiers();
+      if(!Modifier.isPublic(getClientInstanceMods) || !Modifier.isStatic(getClientInstanceMods))
+      {
+        print(String.format("ERROR: Method '%s' is not public", CLIENT_NAME));
+        return;
+      }
+
+      mineClient = getClientInstance.invoke(null);
+
+      if(mineClient == null)
+      {
+        print("Unable to get Minecraft Client");
+        return;
+      }
+
+      print("Minecraft Client got!");
+
+      exec.shutdownNow();
+      exec = null;
+      return;
+
+    }
+    catch(ClassNotFoundException e)
+    {
+      print("Class not found: " + e);
+      return;
+    }
+    catch(Exception e)
+    {
+      print("Error: " + e);
+      return;
+    }
+  }
+
+  private static void notify_friends()
+  {
+    try
+    {
+      getIntegratedServerInstance = clientCls.getMethod(CLIENT_GET_INTEGRATED_SERVER_INSTANCE);
+
+      int getIntegratedServerInstanceMods = getIntegratedServerInstance.getModifiers();
+
+      if(!Modifier.isPublic(getIntegratedServerInstanceMods))
+      {
+        print(String.format("ERROR: Get Integrated server method '%s' is not public", CLIENT_GET_INTEGRATED_SERVER_INSTANCE));
+        return;
+      }
+
+      print("Minecraft integrated server instance method got!");
+
+      serverCls = Class.forName(MINECRAFTSERVER_NAME, false, clsLoader);
+      print("Got server class: " + serverCls);
+
+      serverGetCMDS = serverCls.getMethod(MINECRAFTSERVER_GET_COMMANDS_METHOD);
+
+      int serverGetCMDSMods = serverGetCMDS.getModifiers();
+
+      if(!Modifier.isPublic(serverGetCMDSMods))
+      {
+        print(String.format("ERROR: Get server command method '%s' is not public", MINECRAFTSERVER_GET_COMMANDS_METHOD));
+        return;
+      }
+      print("Got server commands method: " + serverGetCMDS);
+
+      cmdCls = Class.forName(COMMAND_CLASS_NAME, false, clsLoader);
+
+      cmdGetDispatcher = cmdCls.getMethod(COMMAND_GET_DISPATCHER_NAME);
+
+      int cmdGetDispatcherMods = cmdGetDispatcher.getModifiers();
+      if(!Modifier.isPublic(cmdGetDispatcherMods))
+      {
+        print(String.format("ERROR: Command get dispatcher '%s' is not public", COMMAND_GET_DISPATCHER_NAME));
+        return;
+      }
+
+    }
+    catch(ClassNotFoundException e)
+    {
+      print("Class not found: " + e);
+      return;
+    }
+    catch(Exception e)
+    {
+      print("Error: " + e);
+      return;
+    }
+  }
+
+  private static void attack()
+  {
+    try
+    {
+      integratedServer = getIntegratedServerInstance.invoke(mineClient);
+
+      if(integratedServer == null)
+      {
+        print("Single player integrated server is not running...");
+        return;
+      }
+      print("Minecraft integrated server got!");
+      serverCMDS = serverGetCMDS.invoke(integratedServer);
+      print("Got server commands: " + serverCMDS);
+
+      if(serverCMDS == null)
+      {
+        print("Could not retrieve server commands");
+        return;
+      }
+
+      cmdPrefixField = cmdCls.getField(COMMAND_PREFIX_NAME); // This field is a public static field
+      print("Got server commands field: " + cmdPrefixField);
+
+      Object cmdPrefixObj = cmdPrefixField.get(serverCMDS);
+      print("Got server commands object: " + cmdPrefixObj);
+
+      // Ensuring we acces what we expect
+      int cmdFieldMods = cmdPrefixField.getModifiers();
+      if(!Modifier.isStatic(cmdFieldMods) || !Modifier.isFinal(cmdFieldMods))
+      {
+        print(String.format("ERROR: Command field '%s' is not static final", COMMAND_PREFIX_NAME));
+        return;
+      }
+
+      COMMAND_PREFIX = cmdPrefixObj != null ? (String) cmdPrefixObj : null;
+
+      print("Command prefix got: '" + COMMAND_PREFIX + "'");
+      cmdDispatcher = cmdGetDispatcher.invoke(serverCMDS);
+
+      if(cmdDispatcher == null)
+      {
+        print("Could not retrieve command dispatcher");
+        return;
+      }
+      print("Command dispatcher got");
+
+      cmdGetSourceStack = integratedServer.getClass().getMethod(COMMAND_GET_SOURCE_STACK);
+
+      int cmdGetSourceStackMods = cmdGetSourceStack.getModifiers();
+      if(!Modifier.isPublic(cmdGetSourceStackMods))
+      {
+        print(String.format("ERROR: Command get source stack '%s' is not public", COMMAND_GET_SOURCE_STACK));
+        return;
+      }
+
+      cmdDispatcherCls = cmdDispatcher.getClass();
+
+      cmdNodeCls = Class.forName("com.mojang.brigadier.tree.CommandNode");
+      cmdDispatcherGetRoot = cmdDispatcherCls.getMethod("getRoot");
+      cmdDispatcherGetAllUsage = cmdDispatcherCls.getMethod("getAllUsage", cmdNodeCls, Object.class, boolean.class);
+
+      cmdSourceStack = cmdGetSourceStack.invoke(integratedServer);
+
+      if(cmdSourceStack == null)
+      {
+        print("Could not retrieve command source stack");
+        return;
+      }
+      print("Command Source Stack got");
+
+      cmdRoot = cmdDispatcherGetRoot.invoke(cmdDispatcher);
+      print("COMMANDS:");
+      for(String u : (String[]) cmdDispatcherGetAllUsage.invoke(cmdDispatcher, cmdRoot, cmdSourceStack, true))
+        print("/" + u);
+
+      print("Server opened");
+    }
+    catch(Exception e)
+    {
+      print("Error: " + e);
+      return;
+    }
+  }
+
+  private static void hurt()
+  {
+    integratedServer = null;
+    serverCMDS = null;
+    cmdPrefixField = null;
+    cmdDispatcher = null;
+    cmdSourceStack = null;
+    cmdRoot = null;
+
+    print("Server closed");
+  }
+  private static void test()
+  {
+    print("Burrowing in to the game");
+
     try
     {
       ClassLoader clsLoader = Thread.currentThread().getContextClassLoader();
       if(clsLoader == null) clsLoader = ClassLoader.getSystemClassLoader();
 
       // Fetch these from the Mojang provided mappings
-      Class<?> clientCls = Class.forName(CLIENT_NAME, false, clsLoader); // net.minecraft.client.Minecraft Class
+      clientCls = Class.forName(CLIENT_NAME, false, clsLoader); // net.minecraft.client.Minecraft Class
 
       int clientClsMods = clientCls.getModifiers();
       if(!Modifier.isPublic(clientClsMods))
@@ -120,7 +388,7 @@ public class Silverfish
       }
       print("Minecraft integrated server got!");
 
-      Class<?> serverCls = Class.forName(MINECRAFTSERVER_NAME, false, clsLoader);
+      serverCls = Class.forName(MINECRAFTSERVER_NAME, false, clsLoader);
       print("Got server class: " + serverCls);
 
       Method serverGetCMDS = serverCls.getMethod(MINECRAFTSERVER_GET_COMMANDS_METHOD);
@@ -143,7 +411,7 @@ public class Silverfish
         return;
       }
 
-      Class<?> cmdCls = Class.forName(COMMAND_CLASS_NAME, false, clsLoader);
+      cmdCls = Class.forName(COMMAND_CLASS_NAME, false, clsLoader);
       Field cmdPrefixField = cmdCls.getField(COMMAND_PREFIX_NAME); // This field is a public static field
       print("Got server commands field: " + cmdPrefixField);
 
@@ -171,7 +439,7 @@ public class Silverfish
         return;
       }
 
-      Object cmdDispatcher = cmdGetDispatcher.invoke(serverCMDS);
+      cmdDispatcher = cmdGetDispatcher.invoke(serverCMDS);
 
       if(cmdDispatcher == null)
       {
@@ -189,7 +457,7 @@ public class Silverfish
         return;
       }
 
-      Object cmdSourceStack = cmdGetSourceStack.invoke(integratedServer);
+      cmdSourceStack = cmdGetSourceStack.invoke(integratedServer);
 
       if(cmdSourceStack == null)
       {
@@ -198,13 +466,13 @@ public class Silverfish
       }
       print("Command Source Stack got");
 
-      Class<?> cmdDispatcherCls = cmdDispatcher.getClass();
+      cmdDispatcherCls = cmdDispatcher.getClass();
 
       //list(cmdDispatcherCls);
 
-      Class<?> cmdNodeCls = Class.forName("com.mojang.brigadier.tree.CommandNode");
+      cmdNodeCls = Class.forName("com.mojang.brigadier.tree.CommandNode");
       Method cmdDispatcherGetRoot = cmdDispatcherCls.getMethod("getRoot");
-      Object cmdRoot = cmdDispatcherGetRoot.invoke(cmdDispatcher);
+      cmdRoot = cmdDispatcherGetRoot.invoke(cmdDispatcher);
       Method cmdDispatcherGetAllUsage = cmdDispatcherCls.getMethod("getAllUsage", cmdNodeCls, Object.class, boolean.class);
       print("COMMANDS:");
       for(String u : (String[]) cmdDispatcherGetAllUsage.invoke(cmdDispatcher, cmdRoot, cmdSourceStack, true))
