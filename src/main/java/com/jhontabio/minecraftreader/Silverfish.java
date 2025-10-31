@@ -34,6 +34,7 @@ public class Silverfish
   
   private static Method getIntegratedServerInstance;
   private static Method serverGetCMDS;
+  private static Method serverInit;
   private static Method cmdGetDispatcher;
   private static Method cmdGetSourceStack;
   private static Method cmdDispatcherGetRoot;
@@ -74,6 +75,8 @@ public class Silverfish
   {
     //displayLoggerToConsole();
     instrumentation = inst;
+
+    instrumentation.addTransformer(new IntegratedServerTransformer(MINECRAFTSERVER_NAME, MINECRAFTSERVER_INIT_METHOD, MINECRAFTSERVER_STOP_METHOD), true);
     print("Hello before anything else from " + arg);
     
     // Run a new thread as to not hinder the game process
@@ -85,6 +88,11 @@ public class Silverfish
   public static void agentmain(String arg)
   {
     print("Hello after main from " + arg);
+  }
+
+  public static void initServer(String owner, String name, String desc)
+  {
+    print("Hello from initServer");
   }
 
   private static void spawn()
@@ -220,6 +228,17 @@ public class Silverfish
         print(String.format("ERROR: Command get dispatcher '%s' is not public", COMMAND_GET_DISPATCHER_NAME));
         return;
       }
+
+      serverInit = serverCls.getMethod(MINECRAFTSERVER_INIT_METHOD);
+
+      int serverInitMods = serverInit.getModifiers();
+
+      if(!Modifier.isProtected(serverInitMods) | !Modifier.isAbstract(serverInitMods))
+      {
+        print(String.format("ERROR: Get server init method '%s' is not protected abstract", MINECRAFTSERVER_INIT_METHOD));
+        return;
+      }
+      print("Got server init method: " + serverInit);
 
     }
     catch(ClassNotFoundException e)
