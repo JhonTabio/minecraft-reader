@@ -54,7 +54,7 @@ public class Silverfish
   private static final String CLIENT_GET_INSTANCE_NAME = "W";
   private static final String CLIENT_GET_INTEGRATED_SERVER_INSTANCE = "ab";
 
-  private static final String MINECRAFTSERVER_NAME = "net.minecraft.server.MinecraftServer";
+  private static final String MINECRAFTSERVER_NAME = "igy";
   private static final String MINECRAFTSERVER_GET_COMMANDS_METHOD = "aJ";
   private static final String MINECRAFTSERVER_INIT_METHOD = "e";
   private static final String MINECRAFTSERVER_STOP_METHOD = "z";
@@ -233,9 +233,9 @@ public class Silverfish
 
       int serverInitMods = serverInit.getModifiers();
 
-      if(!Modifier.isProtected(serverInitMods) | !Modifier.isAbstract(serverInitMods))
+      if(!Modifier.isPublic(serverInitMods))
       {
-        print(String.format("ERROR: Get server init method '%s' is not protected abstract", MINECRAFTSERVER_INIT_METHOD));
+        print(String.format("ERROR: Get server init method '%s' is not public", MINECRAFTSERVER_INIT_METHOD));
         return;
       }
       print("Got server init method: " + serverInit);
