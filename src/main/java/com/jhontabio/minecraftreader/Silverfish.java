@@ -76,7 +76,16 @@ public class Silverfish
     //displayLoggerToConsole();
     instrumentation = inst;
 
-    instrumentation.addTransformer(new IntegratedServerTransformer(MINECRAFTSERVER_NAME, MINECRAFTSERVER_INIT_METHOD, MINECRAFTSERVER_STOP_METHOD), true);
+    try
+    {
+      instrumentation.addTransformer(new MethodEnterTransformer(MINECRAFTSERVER_NAME.replace(".", "/"), MINECRAFTSERVER_INIT_METHOD, Silverfish.class.getDeclaredMethod("initServer", String.class, String.class, String.class)), true);
+    }
+    catch(NoSuchMethodException e)
+    {
+      print("ERROR: Could not grab 'initServer'");
+      return;
+    }
+
     print("Hello before anything else from " + arg);
     
     // Run a new thread as to not hinder the game process
@@ -126,6 +135,7 @@ public class Silverfish
     catch(InterruptedException e)
     {
       print("Spawning was interrupted...");
+      return;
     }
 
     notify_friends();
