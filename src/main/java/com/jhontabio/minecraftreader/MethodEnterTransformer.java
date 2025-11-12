@@ -1,29 +1,32 @@
 package com.jhontabio.minecraftreader;
 
 import java.lang.instrument.ClassFileTransformer;
+import java.lang.reflect.Method;
 import java.security.ProtectionDomain;
+
+import org.objectweb.asm.commons.AdviceAdapter;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.commons.AdviceAdapter;
+import org.objectweb.asm.Type;
 
 import static org.objectweb.asm.Opcodes.ASM9;
 
-public final class IntegratedServerTransformer implements ClassFileTransformer
+public final class MethodEnterTransformer implements ClassFileTransformer
 {
-  private final String minecraftserver_name;
-  private final String minecraftserver_init;
-  private final String minecraftserver_stop;
+  private final String className;
+  private final String methodName;
 
-  public IntegratedServerTransformer(String name, String init, String stop)
+  private final Method methodInject;
+
+  public MethodEnterTransformer(String className, String methodName, Method methodInject)
   {
-    this.minecraftserver_name = name.replace(".", "/");
-    this.minecraftserver_init = init;
-    this.minecraftserver_stop = stop;
+    this.className = className;
+    this.methodName = methodName;
+    this.methodInject = methodInject;
   }
 
   @Override
@@ -33,7 +36,7 @@ public final class IntegratedServerTransformer implements ClassFileTransformer
     try
     {
       // Is class the one we are interested in?
-      if(className == null || className.startsWith("com/jhontabio/minecraftreader/") ||!className.equals(minecraftserver_name)) return null;
+      if(className == null || className.startsWith("com/jhontabio/minecraftreader/") ||!className.equals(this.className)) return null;
 
       if(loader == null) return null;
 
@@ -48,7 +51,7 @@ public final class IntegratedServerTransformer implements ClassFileTransformer
 
           if((access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0) return mv;
 
-          if(!name.equals(minecraftserver_init) && !name.equals(minecraftserver_stop)) return mv;
+          if(!name.equals(methodName)) return mv;
 
           return new AdviceAdapter(ASM9, mv, access, name, desc)
           {
@@ -56,25 +59,14 @@ public final class IntegratedServerTransformer implements ClassFileTransformer
             private final String mName = name;
             private final String mDesc = desc;
 
-            private Label startLabel = new Label();
-            private Label endLabel = new Label();
-
-            @Override
-            public void visitCode()
-            {
-              super.visitCode();
-              visitLabel(startLabel);
-            }
-
             @Override
             protected void onMethodEnter()
             {
-              Silverfish.SILVERFISH_STREAM.println("MehtodEnter");
               visitLdcInsn(owner);
               visitLdcInsn(mName);
               visitLdcInsn(mDesc);
 
-              visitMethodInsn(INVOKESTATIC, "com/jhontabio/minecraftreader/Silverfish", "initServer", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V", false);
+              visitMethodInsn(INVOKESTATIC, Type.getInternalName(methodInject.getDeclaringClass()), methodInject.getName(), Type.getMethodDescriptor(methodInject), false);
             }
           };
         }
