@@ -73,25 +73,7 @@ public class Silverfish
 
   public static void premain(String arg, Instrumentation inst)
   {
-    //displayLoggerToConsole();
-    instrumentation = inst;
-
-    try
-    {
-      instrumentation.addTransformer(new MethodEnterTransformer(MINECRAFTSERVER_NAME.replace(".", "/"), MINECRAFTSERVER_INIT_METHOD, Silverfish.class.getDeclaredMethod("initServer", String.class, String.class, String.class)), true);
-    }
-    catch(NoSuchMethodException e)
-    {
-      print("ERROR: Could not grab 'initServer'");
-      return;
-    }
-
-    print("Hello before anything else from " + arg);
-    
-    // Run a new thread as to not hinder the game process
-    new Thread(() -> {
-      infestGame();
-    }, "Silverfish"){{setDaemon(true);}}.start();
+    setup(inst);
   }
 
   public static void agentmain(String arg)
@@ -99,9 +81,40 @@ public class Silverfish
     print("Hello after main from " + arg);
   }
 
+  private static void setup(Instrumentation inst)
+  {
+    print("Setting up entity[type=Silverfish]");
+
+    instrumentation = inst;
+
+    try
+    {
+      print("Adding method injectors");
+      instrumentation.addTransformer(new MethodEnterTransformer(MINECRAFTSERVER_NAME.replace(".", "/"), MINECRAFTSERVER_INIT_METHOD, Silverfish.class.getDeclaredMethod("initServer", String.class, String.class, String.class)), true);
+      instrumentation.addTransformer(new MethodEnterTransformer(MINECRAFTSERVER_NAME.replace(".", "/"), MINECRAFTSERVER_STOP_METHOD, Silverfish.class.getDeclaredMethod("stopServer", String.class, String.class, String.class)), true);
+    }
+    catch(NoSuchMethodException e)
+    {
+      print(String.format("Error: Could not find method '%s'", e.getMessage()));
+      return;
+    }
+
+    // Run a new thread as to not hinder the game process
+    new Thread(() -> {
+      spawn();
+    }, "Silverfish"){{setDaemon(true);}}.start();
+  }
+
   public static void initServer(String owner, String name, String desc)
   {
     print("Hello from initServer");
+    attack();
+  }
+
+  public static void stopServer(String owner, String name, String desc)
+  {
+    print("Hello from stopServer");
+    hurt();
   }
 
   private static void spawn()
@@ -116,9 +129,9 @@ public class Silverfish
     }).scheduleAtFixedRate(Silverfish::infestGame, 3, 2, TimeUnit.SECONDS);
   }
 
-  private static void infestGame()
+  private static void spawn()
   {
-    print("Burrowing in to the game");
+    print("Spawning");
 
     exec = Executors.newSingleThreadScheduledExecutor(s -> {
       Thread t = new Thread(s, "Silverfish - Init");
@@ -126,7 +139,7 @@ public class Silverfish
       return t;
     });
 
-    exec.scheduleAtFixedRate(Silverfish::merge_with_client, 3, 2, TimeUnit.SECONDS);
+    exec.scheduleAtFixedRate(Silverfish::infestGame, 3, 2, TimeUnit.SECONDS);
 
     try
     {
@@ -141,8 +154,9 @@ public class Silverfish
     notify_friends();
   }
 
-  private static void merge_with_client()
+  private static void infestGame()
   {
+    print("Burrowing in to the game");
     try
     {
       clsLoader = Thread.currentThread().getContextClassLoader();
@@ -358,166 +372,6 @@ public class Silverfish
     cmdRoot = null;
 
     print("Server closed");
-  }
-  private static void test()
-  {
-    print("Burrowing in to the game");
-
-    try
-    {
-      ClassLoader clsLoader = Thread.currentThread().getContextClassLoader();
-      if(clsLoader == null) clsLoader = ClassLoader.getSystemClassLoader();
-
-      // Fetch these from the Mojang provided mappings
-      clientCls = Class.forName(CLIENT_NAME, false, clsLoader); // net.minecraft.client.Minecraft Class
-
-      int clientClsMods = clientCls.getModifiers();
-      if(!Modifier.isPublic(clientClsMods))
-      {
-        print(String.format("ERROR: Class '%s' is not public", CLIENT_NAME));
-        return;
-      }
-
-      Method getClientInstance = clientCls.getMethod(CLIENT_GET_INSTANCE_NAME); // getInstance() -> Minecraft Method
-
-      int getClientInstanceMods = getClientInstance.getModifiers();
-      if(!Modifier.isPublic(getClientInstanceMods) || !Modifier.isStatic(getClientInstanceMods))
-      {
-        print(String.format("ERROR: Method '%s' is not public", CLIENT_NAME));
-        return;
-      }
-
-      Object mineClient = getClientInstance.invoke(null);
-
-      if(mineClient == null)
-      {
-        print("Unable to get Minecraft Client");
-        return;
-      }
-
-      print("Minecraft Client got!");
-
-      Method getIntegratedServerInstance = clientCls.getMethod(CLIENT_GET_INTEGRATED_SERVER_INSTANCE);
-
-      int getIntegratedServerInstanceMods = getIntegratedServerInstance.getModifiers();
-
-      if(!Modifier.isPublic(getIntegratedServerInstanceMods))
-      {
-        print(String.format("ERROR: Get Integrated server method '%s' is not public", CLIENT_GET_INTEGRATED_SERVER_INSTANCE));
-        return;
-      }
-
-      print("Minecraft integrated server instance method got!");
-      Object integratedServer = getIntegratedServerInstance.invoke(mineClient);
-
-      if(integratedServer == null)
-      {
-        print("Single player integrated server is not running...");
-        return;
-      }
-      print("Minecraft integrated server got!");
-
-      serverCls = Class.forName(MINECRAFTSERVER_NAME, false, clsLoader);
-      print("Got server class: " + serverCls);
-
-      Method serverGetCMDS = serverCls.getMethod(MINECRAFTSERVER_GET_COMMANDS_METHOD);
-
-      int serverGetCMDSMods = serverGetCMDS.getModifiers();
-
-      if(!Modifier.isPublic(serverGetCMDSMods))
-      {
-        print(String.format("ERROR: Get server command method '%s' is not public", MINECRAFTSERVER_GET_COMMANDS_METHOD));
-        return;
-      }
-      print("Got server commands method: " + serverGetCMDS);
-
-      Object serverCMDS = serverGetCMDS.invoke(integratedServer);
-      print("Got server commands: " + serverCMDS);
-
-      if(serverCMDS == null)
-      {
-        print("Could not retrieve server commands");
-        return;
-      }
-
-      cmdCls = Class.forName(COMMAND_CLASS_NAME, false, clsLoader);
-      Field cmdPrefixField = cmdCls.getField(COMMAND_PREFIX_NAME); // This field is a public static field
-      print("Got server commands field: " + cmdPrefixField);
-
-      Object cmdPrefixObj = cmdPrefixField.get(serverCMDS);
-      print("Got server commands object: " + cmdPrefixObj);
-
-      // Ensuring we acces what we expect
-      int cmdFieldMods = cmdPrefixField.getModifiers();
-      if(!Modifier.isStatic(cmdFieldMods) || !Modifier.isFinal(cmdFieldMods))
-      {
-        print(String.format("ERROR: Command field '%s' is not static final", COMMAND_PREFIX_NAME));
-        return;
-      }
-
-      final String COMMAND_PREFIX = cmdPrefixObj != null ? (String) cmdPrefixObj : null;
-
-      print("Command prefix got: '" + COMMAND_PREFIX + "'");
-
-      Method cmdGetDispatcher = cmdCls.getMethod(COMMAND_GET_DISPATCHER_NAME);
-
-      int cmdGetDispatcherMods = cmdGetDispatcher.getModifiers();
-      if(!Modifier.isPublic(cmdGetDispatcherMods))
-      {
-        print(String.format("ERROR: Command get dispatcher '%s' is not public", COMMAND_GET_DISPATCHER_NAME));
-        return;
-      }
-
-      cmdDispatcher = cmdGetDispatcher.invoke(serverCMDS);
-
-      if(cmdDispatcher == null)
-      {
-        print("Could not retrieve command dispatcher");
-        return;
-      }
-      print("Command dispatcher got");
-
-      Method cmdGetSourceStack = integratedServer.getClass().getMethod(COMMAND_GET_SOURCE_STACK);
-
-      int cmdGetSourceStackMods = cmdGetSourceStack.getModifiers();
-      if(!Modifier.isPublic(cmdGetSourceStackMods))
-      {
-        print(String.format("ERROR: Command get source stack '%s' is not public", COMMAND_GET_SOURCE_STACK));
-        return;
-      }
-
-      cmdSourceStack = cmdGetSourceStack.invoke(integratedServer);
-
-      if(cmdSourceStack == null)
-      {
-        print("Could not retrieve command source stack");
-        return;
-      }
-      print("Command Source Stack got");
-
-      cmdDispatcherCls = cmdDispatcher.getClass();
-
-      //list(cmdDispatcherCls);
-
-      cmdNodeCls = Class.forName("com.mojang.brigadier.tree.CommandNode");
-      Method cmdDispatcherGetRoot = cmdDispatcherCls.getMethod("getRoot");
-      cmdRoot = cmdDispatcherGetRoot.invoke(cmdDispatcher);
-      Method cmdDispatcherGetAllUsage = cmdDispatcherCls.getMethod("getAllUsage", cmdNodeCls, Object.class, boolean.class);
-      print("COMMANDS:");
-      for(String u : (String[]) cmdDispatcherGetAllUsage.invoke(cmdDispatcher, cmdRoot, cmdSourceStack, true))
-        print("/" + u);
-
-    }
-    catch(ClassNotFoundException e)
-    {
-      print("Class not found: " + e);
-      return;
-    }
-    catch(Exception e)
-    {
-      print("Error: " + e);
-      return;
-    }
   }
 
   // DEBUG USE
