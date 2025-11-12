@@ -76,9 +76,9 @@ public class Silverfish
     setup(inst);
   }
 
-  public static void agentmain(String arg)
+  public static void agentmain(String arg, Instrumentation inst)
   {
-    print("Hello after main from " + arg);
+    setup(inst);
   }
 
   private static void setup(Instrumentation inst)
