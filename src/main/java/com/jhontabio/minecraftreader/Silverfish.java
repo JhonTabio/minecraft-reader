@@ -119,18 +119,6 @@ public class Silverfish
 
   private static void spawn()
   {
-    print("Starting infestation to the game");
-
-    // Run a new thread as to not hinder the game process
-    Executors.newSingleThreadScheduledExecutor(s -> {
-      Thread t = new Thread(s, "Silverfish");
-      t.setDaemon(true);
-      return t;
-    }).scheduleAtFixedRate(Silverfish::infestGame, 3, 2, TimeUnit.SECONDS);
-  }
-
-  private static void spawn()
-  {
     print("Spawning");
 
     exec = Executors.newSingleThreadScheduledExecutor(s -> {
